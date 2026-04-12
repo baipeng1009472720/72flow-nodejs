@@ -148,7 +148,7 @@ const result = await new FlowEngine().execute(flowDefinition, {});
 |-------------|--------------------------------------------------|-------------------------------------------------|
 | `START`     | 流程起始节点                                     | —                                               |
 | `END`       | 流程结束周期。支持精准提取指定节点产物            | `config.outputResult.sourceCode`                |
-| `SCRIPT`    | 执行 JavaScript 脚本。支持 `scriptResult` 返回值   | `config.script.scriptCode`                      |
+| `SCRIPT`    | 执行 JavaScript 脚本。支持 `scriptResult` 返回值   | `config.scriptCode`                             |
 | `DECISION`  | 运行脚本计算返回值，与出边 `condition` 字段匹配   | `config.decision.scriptCode`                    |
 | `CONDITION` | 对每条出边独立求值布尔表达式                       | `config.condition.scriptCode`                   |
 | `PARALLEL`  | 并发触发所有出边分支，需配合 `convergeMap` 使用   | `convergeMap` (流程定义级)                       |
