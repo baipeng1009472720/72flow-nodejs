@@ -114,6 +114,13 @@ export class X6Parser {
       cfg.api = this.normalizeApiField(cfg.api, 'headers');
     }
 
+    // ── script 字段规范化 ──
+    if (type === 'SCRIPT') {
+      if (!cfg.script && cfg.scriptCode) {
+        cfg.script = { scriptCode: cfg.scriptCode, scriptType: cfg.scriptType ?? 'javascript' };
+      }
+    }
+
     return cfg as NodeConfigDef;
   }
 

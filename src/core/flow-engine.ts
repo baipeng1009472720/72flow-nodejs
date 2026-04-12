@@ -229,11 +229,14 @@ export class FlowEngine extends SimpleEmitter {
 
   // ─── 结果构建 ─────────────────────────────────────────
   private buildResult(context: FlowContext): FlowResult {
-    const outputs = context.getNodeOutputs();
-    const endOutput = Object.entries(outputs).find(
-      ([k]) => String(context.getNode(k)?.type ?? k).toUpperCase() === 'END'
-        || (k.startsWith('END') || k.startsWith('end'))
-    )?.[1];
+    const traces = context.getTraces();
+    // 优先从 traces 找最后一个成功的 END 节点产出
+    const endTrace = [...traces].reverse().find(t => {
+      const node = context.getNode(t.nodeId);
+      return (node?.type?.toUpperCase() === 'END' || t.code?.startsWith('END')) && t.status === NodeStatus.COMPLETED;
+    });
+
+    const endOutput = endTrace ? endTrace.data : undefined;
 
     return {
       executionId: context.getExecutionId(),
