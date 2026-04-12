@@ -1,18 +1,46 @@
 {
-  "name": "72flow-nodejs",
+  "name": "@baipeng139/72flow-nodejs",
   "version": "1.0.0",
-  "description": "Node.js implementation of 72flow orchestration engine",
+  "description": "Node.js / browser implementation of the 72flow orchestration engine",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "vitest",
     "test": "vitest run",
-    "build": "tsup src/index.ts --format esm,cjs --dts --clean"
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "prepublishOnly": "npm run build"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "workflow",
+    "orchestration",
+    "flow-engine",
+    "72flow",
+    "bpmn"
+  ],
+  "author": "baipeng",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/baipeng1009472720/72flow-nodejs.git"
+  },
+  "bugs": {
+    "url": "https://github.com/baipeng1009472720/72flow-nodejs/issues"
+  },
+  "homepage": "https://github.com/baipeng1009472720/72flow-nodejs#readme",
   "devDependencies": {
     "@types/node": "^25.6.0",
     "tsup": "^8.5.1",
@@ -24,3 +52,4 @@
     "lodash-es": "^4.18.1"
   }
 }
+
