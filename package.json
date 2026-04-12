@@ -1,0 +1,26 @@
+{
+  "name": "72flow-nodejs",
+  "version": "1.0.0",
+  "description": "Node.js implementation of 72flow orchestration engine",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "dev": "vitest",
+    "test": "vitest run",
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.4"
+  },
+  "dependencies": {
+    "@types/lodash-es": "^4.17.12",
+    "lodash-es": "^4.18.1"
+  }
+}
