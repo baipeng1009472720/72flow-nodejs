@@ -1,5 +1,5 @@
 {
-  "name": "@baipeng139/72flow-nodejs",
+  "name": "72flow-nodejs",
   "version": "1.0.0",
   "description": "Node.js / browser implementation of the 72flow orchestration engine",
   "type": "module",
