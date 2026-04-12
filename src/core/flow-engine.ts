@@ -52,12 +52,33 @@ export class FlowEngine extends SimpleEmitter {
 
   // ─── 公开入口 ────────────────────────────────────────────
   public async execute(
-    definition: FlowDefinition,
+    definition: FlowDefinition, 
     variables: Record<string, any> = {},
+    options: { stream?: boolean } = {}
   ): Promise<FlowResult> {
     const executionId = `exec-${Math.random().toString(36).slice(2, 10)}`;
     const context = new FlowContext(executionId, definition, variables);
+    
+    // 设置流式模式
+    if (options.stream !== undefined) {
+      context.setStreamingMode(options.stream);
+    }
+    
     this.activeContexts.set(executionId, context);
+
+    // 注入流式转发逻辑
+    context.setStreamHandler((nodeId, chunk) => {
+      if (nodeId === '__node_event__') {
+        const { type, ...payload } = chunk;
+        if (type === 'completed') {
+           this.emit('node.completed', payload);
+        } else if (type === 'failed') {
+           this.emit('node.failed', payload);
+        }
+      } else {
+        this.emit('node.stream', { executionId, nodeId, chunk });
+      }
+    });
 
     return new Promise<FlowResult>((resolve) => {
       this.once(`flow.finished.${executionId}`, () => {

@@ -35,6 +35,8 @@ export class FlowContext {
   private nodeOutputs: Record<string, any> = {};
   private convergeStates: Map<string, { arrived: Set<string>; expected: number }> = new Map();
   private traces: ExecutionTrace[] = [];
+  private onStreamHandler?: (nodeId: string, chunk: any) => void;
+  private streamingMode: boolean = false;
 
   constructor(executionId: string, definition: FlowDefinition, variables: Record<string, any>) {
     this.executionId = executionId;
@@ -42,6 +44,14 @@ export class FlowContext {
     this.variables = { ...variables };
     this.startTime = Date.now();
     this.buildIndex();
+  }
+
+  public setStreamingMode(enabled: boolean) {
+    this.streamingMode = enabled;
+  }
+
+  public isStreamingEnabled(): boolean {
+    return this.streamingMode;
   }
 
   /** 构造时预建索引，所有后续查询均为 O(1) */
@@ -147,6 +157,8 @@ export class FlowContext {
     }
 
     const durationMs = endTime - startTime;
+    const durationNs = durationMs * 1_000_000;
+
     this.traces.push({
       nodeId,
       code:       node?.code ?? nodeId,
@@ -154,8 +166,19 @@ export class FlowContext {
       startTime,
       endTime,
       duration:   durationMs,
-      durationNs: durationMs * 1_000_000,   // 毫秒 → 纳秒，与 Java 对齐
+      durationNs: durationNs,   // 毫秒 → 纳秒，与 Java 对齐
       data:       output,
+    });
+
+    // 发射带完整执行报告的完成事件
+    this.emitStream('__node_event__', {
+      type: 'completed',
+      nodeId,
+      output,
+      startTime,
+      endTime,
+      duration: durationMs,
+      durationNs
     });
   }
 
@@ -200,5 +223,17 @@ export class FlowContext {
   /** 获取 LOOP_START 节点的循环体路径（来自解析器预计算的 loopBodyPaths） */
   public getLoopBodyPath(loopStartNodeId: string): string[] {
     return this.definition.loopBodyPaths?.[loopStartNodeId] ?? [];
+  }
+
+  /** 设置流式消息处理器（内部由 FlowEngine 调用以向外广播） */
+  public setStreamHandler(handler: (nodeId: string, chunk: any) => void) {
+    this.onStreamHandler = handler;
+  }
+
+  /** 发射流式消息块（由执行器调用） */
+  public emitStream(nodeId: string, chunk: any) {
+    if (this.onStreamHandler) {
+      this.onStreamHandler(nodeId, chunk);
+    }
   }
 }

@@ -576,7 +576,13 @@ class LlmExecutor {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${apiKey}`,
                 },
-                body: JSON.stringify({model, messages, temperature, max_tokens: maxTokens}),
+                body: JSON.stringify({
+                    model,
+                    messages,
+                    temperature,
+                    max_tokens: maxTokens,
+                    stream: true, // 强制开启流式以支持吐字效果
+                }),
             });
 
             if (!response.ok) {
@@ -584,17 +590,54 @@ class LlmExecutor {
                 return {success: false, message: `LLM 调用失败: ${err?.error?.message ?? response.status}`};
             }
 
-            const data = await response.json();
-            const content = data.choices?.[0]?.message?.content ?? '';
-            const usage = data.usage ?? {};
+            // 处理流式响应
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+            let fullContent = '';
+            let modelId = model;
+
+            if (reader) {
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+                        const dataStr = trimmed.slice(6);
+                        if (dataStr === '[DONE]') break;
+
+                        try {
+                            const json = JSON.parse(dataStr);
+                            const delta = json.choices?.[0]?.delta?.content ?? '';
+                            if (delta) {
+                                fullContent += delta;
+                                // 实时发射流片段
+                                context.emitStream(node.id, {delta, fullContent});
+                            }
+                            if (json.model) modelId = json.model;
+                        } catch (e) {
+                            // 忽略部分 JSON 解析错误（多行拼接情况）
+                        }
+                    }
+                }
+            } else {
+                // 回退到非流式处理（或处理不支持 ReadableStream 的环境）
+                const data = await response.json();
+                fullContent = data.choices?.[0]?.message?.content ?? '';
+                modelId = data.model ?? model;
+            }
 
             return {
                 success: true,
                 data: {
-                    llmResponse: content,
-                    model: data.model ?? model,
-                    inputTokens: usage.prompt_tokens ?? 0,
-                    outputTokens: usage.completion_tokens ?? 0,
+                    llmResponse: fullContent,
+                    model: modelId,
+                    inputTokens: 0, // 流式协议通常不包含实时 usage，需后期计算或忽略
+                    outputTokens: 0,
                 },
             };
         } catch (e: any) {
