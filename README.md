@@ -1,24 +1,24 @@
 # 72flow-nodejs
 
+[![NPM Version](https://img.shields.io/npm/v/72flow-nodejs.svg)](https://www.npmjs.com/package/72flow-nodejs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.x-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green)](https://nodejs.org/)
 
-72flow 工作流编排引擎的 **Node.js / TypeScript** 实现，支持在浏览器和 Node.js 双环境中运行，与 Java 后端引擎保持行为一致。
+**72flow-nodejs** 是 72flow 工作流编排引擎的轻量级 JavaScript 实现。它旨在提供一个与 Java 后端行为完全一致的、可在浏览器和 Node.js 环境中无缝运行的流程执行核心。
 
 ---
 
-## 特性
+## 核心特性
 
-- ✅ **多节点类型**：START、END、SCRIPT、DECISION、CONDITION、PARALLEL、LOOP、API、LLM
-- ✅ **浏览器 & Node.js 双运行时**：无需修改代码，同一套引擎在两端行为一致
-- ✅ **并行分支**：`PARALLEL` 节点自动并发触发分支，汇聚后继续执行
-- ✅ **条件分支**：`DECISION` / `CONDITION` 节点支持 JavaScript 表达式路由
-- ✅ **循环执行**：`LOOP` 节点支持数组/次数迭代，内联同步执行循环体
-- ✅ **LLM 集成**：内置 OpenAI / Qwen / Claude / Ollama 兼容接口
-- ✅ **事件系统**：引擎发射 `node.starting`、`node.completed`、`node.failed` 等事件
-- ✅ **X6 格式解析**：内置 `@antv/x6` 画布 JSON 格式解析器，直接对接前端图形编辑器
-- ✅ **ESM + CJS 双格式产物**：兼容各种打包场景
+- 🚀 **极轻量**：无重度依赖，压缩后产物极小。
+- ✅ **全能力节点**：支持 START、END、SCRIPT、DECISION、CONDITION、PARALLEL、LOOP、API、LLM 等 9 种核心节点。
+- ✅ **双运行时**：天然支持现代浏览器与 Node.js 18+ 环境。
+- ✅ **精准输出**：END 节点支持根据 `sourceCode` 路由特定节点的产物作为流程结果。
+- ✅ **脚本捕获**：SCRIPT 节点支持捕获显式 `return` 的值。
+- ✅ **X6 友好**：内置对 `@antv/x6` 导出的图形 JSON 的原生解析支持。
+- ✅ **事件驱动**：完整的生命周期钩子（starting, completed, failed）。
+- ✅ **零配置 LLM**：内置对 OpenAI 协议大模型的支持。
 
 ---
 
@@ -147,8 +147,8 @@ const result = await new FlowEngine().execute(flowDefinition, {});
 | 节点类型    | 说明                                             | 关键配置字段                                     |
 |-------------|--------------------------------------------------|-------------------------------------------------|
 | `START`     | 流程起始节点                                     | —                                               |
-| `END`       | 流程结束节点，输出所有变量                        | —                                               |
-| `SCRIPT`    | 执行 JavaScript 脚本，可读写流程变量              | `config.script`（字符串）                        |
+| `END`       | 流程结束周期。支持精准提取指定节点产物            | `config.outputResult.sourceCode`                |
+| `SCRIPT`    | 执行 JavaScript 脚本。支持 `scriptResult` 返回值   | `config.script.scriptCode`                      |
 | `DECISION`  | 运行脚本计算返回值，与出边 `condition` 字段匹配   | `config.decision.scriptCode`                    |
 | `CONDITION` | 对每条出边独立求值布尔表达式                       | `config.condition.scriptCode`                   |
 | `PARALLEL`  | 并发触发所有出边分支，需配合 `convergeMap` 使用   | `convergeMap` (流程定义级)                       |
