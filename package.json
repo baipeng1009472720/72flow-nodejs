@@ -1,6 +1,6 @@
 {
   "name": "72flow-nodejs",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Node.js / browser implementation of the 72flow orchestration engine",
   "type": "module",
   "main": "./dist/index.cjs",
