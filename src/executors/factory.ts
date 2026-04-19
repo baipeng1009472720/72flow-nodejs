@@ -4,39 +4,59 @@ import {createLogger} from '../support/logger.js';
 
 const log = createLogger('Executor');
 
+// ─────────────────────────────────────────────────────────
+// 执行器接口
+// ─────────────────────────────────────────────────────────
 export interface NodeExecutor {
-    execute(node: NodeDef, context: FlowContext): Promise<NodeResult>;
+    execute(node: NodeDef, context: FlowContext): Promise<NodeResult> | NodeResult;
 }
 
 // ─────────────────────────────────────────────────────────
 // 工厂入口
 // ─────────────────────────────────────────────────────────
 export class NodeExecutorFactory {
+    private static executors: Map<string, NodeExecutor> = new Map();
+    private static isInitialized = false;
+
+    /**
+     * 注册自定义执行器
+     */
+    static register(type: string, executor: NodeExecutor) {
+        this.executors.set(type.toUpperCase(), executor);
+    }
+
+    /**
+     * 初始化内置执行器
+     */
+    private static initBuiltins() {
+        if (this.isInitialized) return;
+        this.register('START', StartExecutor);
+        this.register('END', EndExecutor);
+        this.register('SCRIPT', ScriptExecutor);
+        this.register('DECISION', DecisionExecutor);
+        this.register('CONDITION', DecisionExecutor);
+        this.register('PARALLEL', ParallelExecutor);
+        this.register('LOOP', LoopExecutor);
+        this.register('API', ApiExecutor);
+        this.register('LLM', LlmExecutor);
+        this.register('DATABASE', DatabaseExecutor);
+        this.register('REDIS', RedisExecutor);
+        this.isInitialized = true;
+    }
+
     static async execute(node: NodeDef, context: FlowContext): Promise<NodeResult> {
+        this.initBuiltins();
+
         const type = String(node.type).toUpperCase();
         log.info(`执行节点 [${node.id}] 类型=${type}`);
-        switch (type) {
-            case 'START':
-                return StartExecutor.execute(node, context);
-            case 'END':
-                return EndExecutor.execute(node, context);
-            case 'SCRIPT':
-                return ScriptExecutor.execute(node, context);
-            case 'DECISION':
-            case 'CONDITION':
-                return DecisionExecutor.execute(node, context);
-            case 'PARALLEL':
-                return ParallelExecutor.execute(node, context);
-            case 'LOOP':
-                return await LoopExecutor.execute(node, context);
-            case 'API':
-                return await ApiExecutor.execute(node, context);
-            case 'LLM':
-                return await LlmExecutor.execute(node, context);
-            default:
-                log.warn(`不支持的节点类型: ${type}`);
-                return {success: false, message: `Unsupported node type: ${type}`};
+
+        const executor = this.executors.get(type);
+        if (executor) {
+            return await executor.execute(node, context);
         }
+
+        log.warn(`不支持的节点类型: ${type}`);
+        return {success: false, message: `Unsupported node type: ${type}`};
     }
 }
 
@@ -667,3 +687,129 @@ class LlmExecutor {
         );
     }
 }
+
+// ─────────────────────────────────────────────────────────
+// DATABASE 节点  —  仅 Node.js 环境可用（mysql2）
+// ─────────────────────────────────────────────────────────
+class DatabaseExecutor {
+    static async execute(node: NodeDef, context: FlowContext): Promise<NodeResult> {
+        if (typeof window !== 'undefined') {
+            return {success: false, message: 'DATABASE 节点须使用 Node.js 引擎执行，浏览器环境不支持直接连接数据库'};
+        }
+
+        const cfg = (node.config as any)?.database;
+        if (!cfg) return {success: false, message: 'DATABASE 节点缺少 database 配置'};
+
+        const dbType = (cfg.dbType ?? 'mysql').toLowerCase();
+        if (dbType !== 'mysql') {
+            return {success: false, message: `暂不支持的数据库类型: ${dbType}，当前仅支持 MySQL`};
+        }
+
+        const sql: string = cfg.sql?.trim();
+        if (!sql) return {success: false, message: 'DATABASE 节点缺少 SQL 语句'};
+
+        // 变量插值：SQL 中 {{varName}} → context 变量值
+        const vars = context.getVariables();
+        const interpolatedSql = sql.replace(/\{\{(\w+)\}\}/g, (_, k) =>
+            k in vars ? String(vars[k]) : `{{${k}}}`
+        );
+
+        log.info(`DATABASE [${node.id}] ${dbType} → ${cfg.host}:${cfg.port ?? 3306}/${cfg.database}`);
+        log.info(`DATABASE [${node.id}] SQL: ${interpolatedSql.slice(0, 200)}`);
+
+        let connection: any;
+        try {
+            const mysql2 = await import('mysql2/promise' as any);
+            connection = await mysql2.createConnection({
+                host:     cfg.host     ?? 'localhost',
+                port:     Number(cfg.port ?? 3306),
+                user:     cfg.user     ?? 'root',
+                password: cfg.password ?? '',
+                database: cfg.database ?? '',
+            });
+
+            const [rows, fields] = await connection.execute(interpolatedSql);
+            const result = {
+                rows,
+                rowCount: Array.isArray(rows) ? rows.length : (rows as any)?.affectedRows ?? 0,
+                fields: (fields as any[])?.map((f: any) => f.name) ?? [],
+            };
+
+            log.info(`DATABASE [${node.id}] 执行成功，rowCount=${result.rowCount}`);
+            return {success: true, data: {dbResult: result}};
+        } catch (e: any) {
+            log.error(`DATABASE [${node.id}] 执行失败: ${e.message}`);
+            return {success: false, message: `Database error: ${e.message}`};
+        } finally {
+            if (connection) await connection.end().catch(() => {});
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────
+// REDIS 节点  —  仅 Node.js 环境可用（ioredis）
+// ─────────────────────────────────────────────────────────
+class RedisExecutor {
+    static async execute(node: NodeDef, context: FlowContext): Promise<NodeResult> {
+        if (typeof window !== 'undefined') {
+            return {success: false, message: 'REDIS 节点须使用 Node.js 引擎执行，浏览器环境不支持直接连接 Redis'};
+        }
+
+        const cfg = (node.config as any)?.redis;
+        if (!cfg) return {success: false, message: 'REDIS 节点缺少 redis 配置'};
+
+        const command = (cfg.command ?? 'GET').toUpperCase();
+        const key: string = cfg.key?.trim();
+        if (!key) return {success: false, message: 'REDIS 节点缺少 key 配置'};
+
+        // 变量插值
+        const vars = context.getVariables();
+        const itp = (s: string) =>
+            s?.replace(/\{\{(\w+)\}\}/g, (_, k) => k in vars ? String(vars[k]) : `{{${k}}}`);
+
+        const resolvedKey   = itp(key);
+        const resolvedValue = itp(cfg.value ?? '');
+        const ttl           = Number(cfg.ttl ?? -1);
+        const dbIndex       = Number(cfg.dbIndex ?? 0);
+
+        log.info(`REDIS [${node.id}] ${command} key=${resolvedKey} → ${cfg.host}:${cfg.port ?? 6379} db=${dbIndex}`);
+
+        let client: any;
+        try {
+            const ioredis = await import('ioredis' as any);
+            const Redis = ioredis.default ?? ioredis;
+            client = new Redis({
+                host:        cfg.host     ?? '127.0.0.1',
+                port:        Number(cfg.port ?? 6379),
+                password:    cfg.password || undefined,
+                db:          dbIndex,
+                lazyConnect: true,
+            });
+            await client.connect();
+
+            let redisResult: any;
+            switch (command) {
+                case 'SET':
+                    redisResult = ttl > 0
+                        ? await client.set(resolvedKey, resolvedValue, 'EX', ttl)
+                        : await client.set(resolvedKey, resolvedValue);
+                    break;
+                case 'GET':    redisResult = await client.get(resolvedKey);               break;
+                case 'DEL':    redisResult = await client.del(resolvedKey);               break;
+                case 'EXISTS': redisResult = await client.exists(resolvedKey);            break;
+                case 'EXPIRE': redisResult = await client.expire(resolvedKey, ttl > 0 ? ttl : 60); break;
+                case 'INCR':   redisResult = await client.incr(resolvedKey);              break;
+                default:       return {success: false, message: `不支持的 Redis 指令: ${command}`};
+            }
+
+            log.info(`REDIS [${node.id}] ${command} 执行成功 → ${JSON.stringify(redisResult)}`);
+            return {success: true, data: {redisResult, command, key: resolvedKey}};
+        } catch (e: any) {
+            log.error(`REDIS [${node.id}] 执行失败: ${e.message}`);
+            return {success: false, message: `Redis error: ${e.message}`};
+        } finally {
+            if (client) await client.quit().catch(() => {});
+        }
+    }
+}
+
